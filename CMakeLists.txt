@@ -12,4 +12,4 @@ add_executable(proj1 main.cpp
                 baseConverter.h
                 input.h
                 common.h
-                ui/OptionUI.h ui/Prerequisite.h ui/Parameter.h ui/inputType.h ui/UIExcept.h)
+                ui/OptionUI.h ui/Prerequisite.h ui/Parameter.h ui/inputType.h ui/UIExcept.h ui/MixedColumn.h)

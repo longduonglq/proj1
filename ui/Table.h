@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <vector>
 #include <type_traits>
+#include <sstream>
 #include "Column.h"
 #include "configuration.h"
 
@@ -17,14 +18,17 @@ void tableDemo();
 
 class Table {
 public:
+    int tableWidth;
 
     Table(const std::vector<AbstractColumn*>& _columns, std::wstring _title)
     :
     columns {_columns},
-    title {_title}
+    title {_title},
+    tableWidth {0},
+    consoleWidth {config::CONSOLE_WIDTH}
     {
         // Center table
-        int tableWidth = std::transform_reduce(
+        tableWidth = std::transform_reduce(
         columns.cbegin(), columns.cend(),
         0,
         std::plus<int> (),
@@ -34,12 +38,38 @@ public:
         rightPadding = leftPadding;
     }
 
-    std::wstring nSpace(int n)
+    Table(const std::vector<AbstractColumn*>& _columns, std::wstring _title, int _consoleWidth, bool selfCentered=true)
+    :
+    columns {_columns},
+    title {_title},
+    tableWidth {0}
+    {
+        // Center table
+        tableWidth = std::transform_reduce(
+        columns.cbegin(), columns.cend(),
+        0,
+        std::plus<int> (),
+        [](const auto& a) { return a->getColumnWidth(); }
+        );
+
+        if (!selfCentered)
+        {
+            consoleWidth = tableWidth;
+        }
+        else
+        {
+            consoleWidth = _consoleWidth;
+        }
+        leftPadding = (consoleWidth - tableWidth) / 2;
+        rightPadding = leftPadding;
+    }
+
+    std::wstring nSpace(int n) const
     {
         return std::wstring(n, ' ');
     }
 
-    std::wstring doubleLine(int n)
+    std::wstring doubleLine(int n) const
     {
         return std::wstring(n, L'=');
     }
@@ -49,21 +79,48 @@ public:
         return std::wstring(n, '_');
     }
 
-    void dumpTableTo(std::wostream& os)
+    void dumpTableTo(std::wostream& os) const
     {
-        os << nSpace(leftPadding)
-           << title
-           << std::endl;
+        if (!title.empty())
+        {
+            os << nSpace(leftPadding)
+               << title
+               << std::endl;
 
-        os << nSpace(leftPadding)
-           << doubleLine(config::CONSOLE_WIDTH - leftPadding - rightPadding)
-           << std::endl;
+            os << nSpace(leftPadding)
+               << doubleLine(consoleWidth - leftPadding - rightPadding)
+               << std::endl;
+        }
 
         for (std::size_t i = 0; i <= columns.at(0)->getSize(); i++)
         {
             os << nSpace(leftPadding);
-            for (const auto& column : columns)
-                column->dumpNext(os);
+            for (auto columnIt = columns.begin(); columnIt != columns.end(); columnIt++)
+            {
+                auto& column = *columnIt;
+                std::wstringstream tmpOs;
+                column->dumpNext(tmpOs);
+                wchar_t t ;
+                while (tmpOs.get(t))
+                {
+                    if (t != '\n')
+                    {
+                        os << t;
+                    }
+                    else
+                    {
+                        auto previousColumnsWidth =
+                        std::transform_reduce(
+                            columns.begin(), columnIt,
+                            leftPadding,
+                            std::plus<>(),
+                            [](const auto& col){ return col->getColumnWidth();}
+                        );
+                        os << t
+                            << nSpace(previousColumnsWidth);
+                    }
+                }
+            }
             os << std::endl;
         }
 
@@ -79,6 +136,7 @@ public:
     }
 
 private:
+    int consoleWidth;
     std::wstring title;
     // Must use polymorphism because Columns
     // might contains items of different types.

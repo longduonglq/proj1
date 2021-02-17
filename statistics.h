@@ -15,12 +15,14 @@
 #include <fstream>
 #include "ui/Table.h"
 
+using namespace std;
+
 template <typename T>
 class Statistics
 {
 public:
     using Quartiles = struct {
-        std::optional<double> Q1, Q2, Q3;
+        optional<double> Q1, Q2, Q3;
     };
 
     using FrequencyEntry = struct {
@@ -29,7 +31,7 @@ public:
         double frequencyPercentage;
     };
 
-    void loadDataFromFilePath(std::string path)
+    void loadDataFromFilePath(string path)
     {
         ifstream statsFile(path);
         if (statsFile.is_open())
@@ -38,7 +40,7 @@ public:
             T currentValue;
             while (statsFile >> currentValue)
                 elements.push_back(currentValue);
-            std::sort(elements.begin(), elements.end());
+            sort(elements.begin(), elements.end());
         }
         else throw UIExcept("Cannot open file");
     }
@@ -55,11 +57,11 @@ public:
     Statistics() :
         elements {}
     {}
-    Statistics(std::vector<T>&& elements)
+    Statistics(vector<T>&& elements)
     :
-    elements {std::move(elements)}
+    elements {move(elements)}
     {
-        std::sort(elements.begin(), elements.end());
+        sort(elements.begin(), elements.end());
     }
 
     const T& getMin() const
@@ -83,13 +85,13 @@ public:
         else
         {
             _sumCache.emplace(
-                std::accumulate(elements.cbegin(), elements.cend(), 0, std::plus<>())
+                accumulate(elements.cbegin(), elements.cend(), 0, plus<>())
             );
             return _sumCache.value();
         }
     }
 
-    std::size_t getSize() const
+    size_t getSize() const
     {
         return elements.size();
     }
@@ -105,30 +107,26 @@ public:
         }
     }
 
-    std::optional<double> getMedian() const
+    optional<double> getMedian() const
     {
         return getMedianInRange(elements.begin(), elements.end());
     }
 
-    const T& getMode() const
+    std::vector<T> getMode() const
     {
-        auto modeIt = elements.cbegin();
-        std::size_t modeFrequency = 0;
-
-        auto current = elements.cbegin();
-        while (current != elements.cend())
+        auto freqTable = getFrequencyTable();
+        auto maxEntry = std::max_element(freqTable.cbegin(), freqTable.cend(),
+                                         [](const FrequencyEntry& entry1, const  FrequencyEntry& entry2)
+                                         {
+                                                return entry1.frequency < entry2.frequency;
+                                         });
+        auto modeElements = std::vector<T>();
+        for (auto& entry : freqTable)
         {
-            std::size_t currentFrequency = std::count(current, elements.cend(), *current);
-            if (currentFrequency >= modeFrequency)
-            {
-                modeIt = current;
-                do
-                {
-                    current++;
-                } while (*current == *modeIt && current != elements.cend());
-            }
+            if (entry.frequency >= maxEntry->frequency)
+                modeElements.push_back(entry.value);
         }
-        return *modeIt;
+        return modeElements;
     }
 
     const double& getVariance() const
@@ -138,12 +136,12 @@ public:
         else
         {
             _varianceCache.emplace(
-            std::transform_reduce(
+            transform_reduce(
             elements.cbegin(), elements.cend(),
             0.0,
-            std::plus<>(),
+            plus<>(),
             [this](const T& element) { return pow(element - this->getMean(), 2); }
-            ) / getSize()
+            ) / (getSize() - 1)
             );
             return _varianceCache.value();
         }
@@ -166,46 +164,47 @@ public:
             return _quartilesCache.value();
         else
         {
-            // TODO: take care of degenerate cases here
             if (getSize() % 2 == 0)
             {
-                _quartilesCache.emplace( Quartiles {
-                                         .Q1 = getMedianInRange(elements.cbegin(), elements.cbegin() + getSize() / 2),
-                                         .Q2 = getMedianInRange(elements.cbegin(), elements.cend()),
-                                         .Q3 = getMedianInRange(elements.cbegin() + 1 + getSize() / 2, elements.cend())
-                                         });
+                _quartilesCache.emplace(
+                    Quartiles {
+                        .Q1 = getMedianInRange(elements.cbegin(), elements.cbegin() + getSize() / 2),
+                        .Q2 = getMedianInRange(elements.cbegin(), elements.cend()),
+                        .Q3 = getMedianInRange(elements.cbegin() + getSize() / 2, elements.cend())
+                    });
             }
             else
             {
-                _quartilesCache.emplace( Quartiles {
-                                         .Q1 = getMedianInRange(elements.cbegin(), elements.cbegin() + getSize() / 2),
-                                         .Q2 = getMedianInRange(elements.cbegin(), elements.cend()),
-                                         .Q3 = getMedianInRange(elements.cbegin() + 2 + getSize() / 2, elements.cend())
-                                         });
+                _quartilesCache.emplace(
+                    Quartiles {
+                        .Q1 = getMedianInRange(elements.cbegin(), elements.cbegin() + getSize() / 2),
+                        .Q2 = getMedianInRange(elements.cbegin(), elements.cend()),
+                        .Q3 = getMedianInRange(elements.cbegin() + getSize() / 2 + 1, elements.cend())
+                    });
             }
             return _quartilesCache.value();
         }
     }
 
-    std::optional<double> getIQR() const
+    optional<double> getIQR() const
     {
         auto& quartiles = getQuartiles();
         if (!quartiles.Q3.has_value() || !quartiles.Q1.has_value())
-            return std::nullopt;
+            return nullopt;
         return quartiles.Q3.value() - quartiles.Q1.value();
     }
 
-    std::optional<std::pair<double, double>> getOutlierFence() const
+    optional<pair<double, double>> getOutlierFence() const
     {
         if (!getIQR().has_value()) return std::nullopt;
         const auto& q = getQuartiles();
-        return std::make_pair(q.Q3.value() + 1.5 * getIQR().value(), q.Q1.value() - 1.5 * getIQR().value());
+        return std::make_pair(q.Q1.value() - 1.5 * getIQR().value(), q.Q3.value() + 1.5 * getIQR().value());
     }
 
     std::vector<T> getOutliers() const
     {
         auto outliers = std::vector<T>();
-        if (!getOutlierFence().has_value()) return elements;
+        if (!getOutlierFence().has_value()) return outliers;
         auto fence = getOutlierFence().value();
         std::copy_if(elements.cbegin(), elements.cend(),
                      std::back_inserter(outliers),
@@ -232,7 +231,7 @@ public:
             0.0,
             std::plus<>(),
             [this](const T& element) { return abs(element - this->getMean()); }
-        );
+        ) / getSize();
     }
 
     double getRootMeanSquare() const
@@ -263,7 +262,44 @@ public:
         return (100.0 * getStandardDeviation()) / getMean();
     }
 
-    std::vector<FrequencyEntry> getFrequencyTable()
+    double getSkewness() const
+    {
+        return
+        std::transform_reduce(
+            elements.cbegin(), elements.cend(),
+            0.0,
+            std::plus<>(),
+            [this](const auto& e)
+            {
+                return pow(e - this->getMean(), 3);
+            }
+        ) / (getSize() * pow(getStandardDeviation(), 3));
+    }
+
+    double getKurtosis() const
+    {
+        double n = getSize();
+        double coefficient = n * (n + 1) / ((n - 1) * (n - 2) * (n - 3));
+        return
+        coefficient * std::transform_reduce(
+        elements.cbegin(), elements.cend(),
+        0.0,
+        std::plus<>(),
+        [this](const auto& e)
+        {
+            return pow(e - this->getMean(), 4);
+        }
+        ) / pow(getStandardDeviation(), 4);
+    }
+
+    double getKurtosisExcess() const
+    {
+        double n = getSize();
+        double adjustmentTerm = -3* (n - 1) * (n - 1) / ((n - 2) * (n - 3));
+        return getKurtosis() + adjustmentTerm;
+    }
+
+    std::vector<FrequencyEntry> getFrequencyTable() const
     {
         auto frequencyTable = std::vector<FrequencyEntry> ();
         auto it = elements.cbegin();
@@ -308,16 +344,15 @@ protected:
         if (distance <= 2)
             return std::nullopt;
 
-        auto medianIt = elements.cbegin();
         if (distance % 2 == 0)
         {
-            std::advance(medianIt, distance / 2);
-            return std::make_optional((*medianIt + *std::next(medianIt)) / 2.0);
+            auto medianIndex = distance / 2 + std::distance(elements.cbegin(), lowBound);
+            return std::make_optional((elements.at(medianIndex) + elements.at(medianIndex - 1)) / 2.0);
         }
         else
         {
-            std::advance(medianIt, (distance + 1) / 2);
-            return std::make_optional(*medianIt);
+            auto medianIndex = distance / 2 + std::distance(elements.cbegin(), lowBound);
+            return std::make_optional(elements.at(medianIndex));
         }
     }
 };

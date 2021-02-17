@@ -11,6 +11,7 @@
 #include <iostream>
 #include "ui/OptionUI.h"
 #include "statistics.h"
+#include "ui/MixedColumn.h"
 
 using namespace std::placeholders;
 
@@ -21,44 +22,37 @@ public:
 
     void showCurrentState() override
     {
-        auto optionColumn1 = new StringColumn(
-        {
-        L"A> Load data file",
-        L"B> Minimum",
-        L"C> Maximum",
-        L"D> Range",
-        L"E> Size",
-        L"F> Sum",
-        L"G> Mean",
-        L"H> Median",
-        L"I> Frequencies",
-        L"J> Mode",
-        L"K> Standard Deviation",
-        L"L> Variance",
-        L"W> Display result and write to file."
-        },
-        0, 5,
-        L""
+        auto optionColumn1 = new MixedColumn (0, 5,L"");
+        optionColumn1->addItems(
+            L"A> Load data file",
+            L"B> Minimum",
+            L"C> Maximum",
+            L"D> Range",
+            L"E> Size",
+            L"F> Sum",
+            L"G> Mean",
+            L"H> Median",
+            L"I> Frequencies",
+            L"J> Mode",
+            L"K> Standard Deviation",
+            L"L> Variance",
+            L"W> Display result and write to file.",
+            L"0> Return"
         );
-        auto optionColumn2 = new StringColumn(
-        {
-        L"M> Mid Range",
-        L"N> Quartiles",
-        L"O> Interquartile Range",
-        L"P> Outliers",
-        L"Q> Sum of Squares",
-        L"R> Mean Absolute Deviation",
-        L"S> Root Mean Square",
-        L"T> Standard Error of the Mean",
-        L"U> Coefficient of Variation",
-        L"V> Relative Standard Deviation"
-        },
-        0, 5,
-        L""
+        auto optionColumn2 = new MixedColumn(0, 5,L"");
+        optionColumn2->addItems(
+            L"M> Mid Range",
+            L"N> Quartiles",
+            L"O> Interquartile Range",
+            L"P> Outliers",
+            L"Q> Sum of Squares",
+            L"R> Mean Absolute Deviation",
+            L"S> Root Mean Square",
+            L"T> Standard Error of the Mean",
+            L"U> Coefficient of Variation",
+            L"V> Relative Standard Deviation"
         );
-
-        auto table = Table({ optionColumn1, optionColumn2 }, L"3> Descriptive Statistics");
-        table.dumpTableTo(std::wcout);
+        Table({ optionColumn1, optionColumn2 }, L"3> Descriptive Statistics").dumpTableTo(std::wcout);
     }
 
     void init() override
@@ -93,7 +87,7 @@ public:
                   statsDisplayAdapter(L"Mean", std::bind(&Statistics::getMean, this))
         ).require(nonEmptyVector);
         addOption('h',
-                  optionalStatDisplayAdapter(L"Median", std::bind(&Statistics::getMedian, this))
+                  statsDisplayAdapter(L"Median", std::bind(&Statistics::getMedian, this))
         ).require(nonEmptyVector);
         addOption('i',
                   frequencyTableDisplayAdapter(std::bind(&Statistics::getFrequencyTable, this))
@@ -114,10 +108,10 @@ public:
                   quartilesDisplayAdapter(std::bind(&Statistics::getQuartiles, this))
         ).require(nonEmptyVector);
         addOption('o',
-                  optionalStatDisplayAdapter(L"Interquartile Range", std::bind(&Statistics::getIQR, this))
+                  statsDisplayAdapter(L"Interquartile Range", std::bind(&Statistics::getIQR, this))
         ).require(nonEmptyVector);
         addOption('p',
-                  vectorStatDisplayAdapter(L"Outliers", std::bind(&Statistics::getOutliers, this))
+                  statsDisplayAdapter(L"Outliers", std::bind(&Statistics::getOutliers, this))
         ).require(nonEmptyVector);
         addOption('q',
                   statsDisplayAdapter(L"Sum of Squares", std::bind(&Statistics::getSumOfSquares, this))
@@ -137,8 +131,7 @@ public:
         addOption('v',
                   statsDisplayAdapter(L"Relative Standard Deviation", std::bind(&Statistics::getRelativeStd, this))
         ).require(nonEmptyVector);
-        addOption('w',
-                  statsDisplayAdapter(L"Display result a--", std::bind(&Statistics::getSize, this))
+        addOption('w', std::bind(&StatsUI::displayAllResultAndWriteToFile, this)
         ).require(nonEmptyVector);
     }
 
@@ -155,49 +148,11 @@ public:
     {
         return [statsGetter, name] ()
         {
-            double stat = statsGetter();
-            auto nameColumn = new StringColumn (std::vector<std::wstring>{name}, 0, 5, L"");
-            auto equalColumn = new StringColumn (std::vector<std::wstring>{std::wstring(L"=")}, 0, 5, L"");
-            auto statColumn = new DoubleColumn (std::vector<double>{stat}, 0, 5, L"");
-            auto table = Table({nameColumn, equalColumn, statColumn}, L"Result: ");
-            table.dumpTableTo(std::wcout);
-        };
-    }
-
-    template <class WideString = std::wstring, typename Func>
-    std::function<void(void)> optionalStatDisplayAdapter(WideString name, Func statsGetter)
-    {
-        return [statsGetter, name] ()
-        {
-            std::optional<double> stat = statsGetter();
-            auto nameColumn = new StringColumn (std::vector<std::wstring>{name}, 0, 5, L"");
-            auto equalColumn = new StringColumn (std::vector<std::wstring>{std::wstring(L"=")}, 0, 5, L"");
-            auto statColumn = new StringColumn (
-                stat.has_value() ? std::vector<std::wstring>{std::to_wstring(stat.value())} : std::vector<std::wstring>{L"Unknown"} ,
-                0, 5, L"");
-            auto table = Table({nameColumn, equalColumn, statColumn}, L"Result: ");
-            table.dumpTableTo(std::wcout);
-        };
-    }
-
-    template <class WideString = std::wstring, typename Func>
-    std::function<void(void)> vectorStatDisplayAdapter(WideString name, Func statsGetter)
-    {
-        return [statsGetter, name] ()
-        {
             auto stat = statsGetter();
-            auto nameColumn = new StringColumn (std::vector<std::wstring>{name}, 0, 5, L"");
-            auto equalColumn = new StringColumn (std::vector<std::wstring>{std::wstring(L"=")}, 0, 5, L"");
-            std::wstring vectorRepr;
-            for (const auto& element: stat)
-            {
-                vectorRepr += std::to_wstring(element) + L", ";
-            }
-            auto statColumn = new StringColumn (
-                std::vector<std::wstring>{vectorRepr},
-                0, 5, L"");
-            auto table = Table({nameColumn, equalColumn, statColumn}, L"Result: ");
-            table.dumpTableTo(std::wcout);
+            auto nameColumn = new MixedColumn(0, 5, L"", name);
+            auto equalColumn = new MixedColumn(0, 5, L"", L"=");
+            auto statColumn = new MixedColumn(0, 5, L"", stat);
+            Table({nameColumn, equalColumn, statColumn}, L"Result: ").dumpTableTo(std::wcout);
         };
     }
 
@@ -206,50 +161,129 @@ public:
     {
         return [quartilesGetter] ()
         {
-            Quartiles quartile = quartilesGetter();
-            auto nameColumn = new StringColumn ({L"Q1", L"Q2", L"Q3"}, 0, 5, L"");
-            auto equalColumn = new StringColumn (std::vector<std::wstring>(3, std::wstring(L"-->")), 0, 5, L"");
-            auto statsColumn = new StringColumn ({}, 0, 5, L"");
-            for (const auto& optionalQuartile: {quartile.Q1, quartile.Q2, quartile.Q3})
-            {
-                if (optionalQuartile.has_value())
-                    statsColumn->addItem(to_wstring(optionalQuartile.value()));
-                else statsColumn->addItem(L"Unknown");
-            }
-            auto table = Table({nameColumn, equalColumn, statsColumn}, L"Quartiles: ");
-            table.dumpTableTo(std::wcout);
+            Quartiles  quartiles = quartilesGetter();
+            auto nameColumn = new MixedColumn(0, 5, L"", "Q1", "Q2", "Q3");
+            auto equalColumn = new MixedColumn(0, 5, L"");
+            equalColumn->repeatedAddItems(std::vector<std::wstring>(3, L"-->"));
+            auto statsColumn = new MixedColumn(0, 5, L"", quartiles.Q1, quartiles.Q2, quartiles.Q3);
+            Table({nameColumn, equalColumn, statsColumn}, L"Quartiles: ").dumpTableTo(std::wcout);
         };
+    }
+
+    template <typename Func>
+    Table* frequencyTableToUITable(Func frequencyTableGetter)
+    {
+        auto freqTable = frequencyTableGetter();
+        std::vector<long> values;
+        std::transform(freqTable.begin(), freqTable.end(), std::back_inserter(values), std::mem_fn(&FrequencyEntry::value));
+        std::vector<long> frequency;
+        std::transform(freqTable.begin(), freqTable.end(), std::back_inserter(frequency), std::mem_fn(&FrequencyEntry::frequency));
+        std::vector<double> frequencyPercentage;
+        std::transform(freqTable.begin(), freqTable.end(), std::back_inserter(frequencyPercentage),
+                       [](const auto& entry){return 100 * std::mem_fn(&FrequencyEntry::frequencyPercentage)(entry);}
+        );
+
+        auto valueColumn = new MixedColumn (0, 5, L"Values");
+        valueColumn->repeatedAddItems(values);
+        auto freqColumn = new MixedColumn (0, 5, L"Frequency");
+        freqColumn->repeatedAddItems(frequency);
+        auto freqPercentColumn = new MixedColumn (0, 5, L"Percentage");
+        freqPercentColumn->repeatedAddItems(frequencyPercentage);
+        return new Table({valueColumn, freqColumn, freqPercentColumn}, L"", -1, false);
     }
 
     template <typename Func>
     std::function<void(void)> frequencyTableDisplayAdapter(Func frequencyTableGetter)
     {
-        return [frequencyTableGetter] ()
+        return [this, frequencyTableGetter] ()
         {
-            auto freqTable = frequencyTableGetter();
-            std::vector<long> values;
-            std::transform(freqTable.begin(), freqTable.end(),
-                           std::back_inserter(values),
-                           std::mem_fn(&FrequencyEntry::value));
-            std::vector<long> frequency;
-            std::transform(freqTable.begin(), freqTable.end(),
-                           std::back_inserter(frequency),
-                           std::mem_fn(&FrequencyEntry::frequency));
-            std::vector<double> frequencyPercentage;
-            std::transform(freqTable.begin(), freqTable.end(),
-                           std::back_inserter(frequencyPercentage),
-                           [](const auto& entry){return 100 * std::mem_fn(&FrequencyEntry::frequencyPercentage)(entry);}
-            );
-
-            auto valueColumn = new LongColumn (values, 0, 5, L"Values");
-            auto freqColumn = new LongColumn (frequency, 0, 5, L"Frequency");
-            auto freqPercentColumn = new DoubleColumn (frequencyPercentage, 0, 5, L"Percentage");
-            auto table = Table({valueColumn, freqColumn, freqPercentColumn}, L"Frequency Table:");
-            table.dumpTableTo(std::wcout);
+            auto table = frequencyTableToUITable(frequencyTableGetter);
+            table->dumpTableTo(std::wcout);
+            delete table;
         };
     }
 
-    std::function<void(void)> displayAllResultAndWriteToFile()
+    void displayAllResultAndWriteToFile()
+    {
+        auto statisticNameColumn = new MixedColumn (0, 5,L"Concept");
+        statisticNameColumn->addItems(
+        L"Minimum",
+        L"Maximum",
+        L"Range",
+        L"Size",
+        L"Sum",
+        L"Mean",
+        L"Median",
+        L"Mode",
+        L"Standard Deviation",
+        L"Variance",
+        L"Mid Range",
+        L"Quartiles",
+        L"Interquartile Range",
+        L"Outliers",
+        L"Sum of Squares",
+        L"Mean Absolute Deviation",
+        L"Root Mean Square",
+        L"Standard Error of the Mean",
+        L"Skewness",
+        L"Kurtosis",
+        L"Kurtosis Excess",
+        L"Coefficient of Variation",
+        L"Relative Standard Deviation",
+        L"Frequency Table");
+
+        auto quartiles = getQuartiles();
+        auto quartileNames = new MixedColumn(0, 5, L"", "Q1", "Q2", "Q3");
+        auto arrowColumn = new MixedColumn(0, 5, L"");
+        arrowColumn->repeatedAddItems(std::vector<const char*>(3, "-->"));
+        auto quartileValues = new MixedColumn(0, 5, L"", quartiles.Q1, quartiles.Q2, quartiles.Q3);
+        auto* quartileTable = new Table({quartileNames, arrowColumn, quartileValues}, L"", -1, false);
+
+        auto statisticValueColumn = new MixedColumn(0, 5, L"Values");
+        statisticValueColumn->addItems(
+            getMin(),
+            getMax(),
+            getRange(),
+            getSize(),
+            getSum(),
+            getMean(),
+            getMedian(),
+            getMode(),
+            getStandardDeviation(),
+            getVariance(),
+            getMidRange(),
+            quartileTable,
+            getIQR(),
+            getOutliers(),
+            getSumOfSquares(),
+            getMeanAbsoluteDeviation(),
+            getRootMeanSquare(),
+            getStdErrorOfMean(),
+            getSkewness(),
+            getKurtosis(),
+            getKurtosisExcess(),
+            getCoefficientOfVariation(),
+            to_wstring(getRelativeStd()) + L"%",
+            frequencyTableToUITable(std::bind(&Statistics::getFrequencyTable, this))
+        );
+
+        auto equalColumn = new MixedColumn(0, 2, L"");
+        equalColumn->repeatedAddItems(std::vector<char>(24, '='));
+
+        auto table = Table({statisticNameColumn, equalColumn, statisticValueColumn}, L"Statistics");
+        table.dumpTableTo(std::wcout);
+
+        auto filePath = StringParameter ("Enter file path: ").collectParam();
+        auto outFile = wofstream (filePath);
+        while (!outFile.is_open())
+        {
+            std::wcout << L"ERROR: Cannot open file. Try again." << endl;
+            filePath = StringParameter ("Enter file path: ").collectParam();
+            outFile = wofstream (filePath);
+        }
+        table.dumpTableTo(outFile);
+        std::wcout << L"Summary was written to file." << std::endl;
+    }
 };
 
 #endif //PROJ1_STATISTICSUI_H
